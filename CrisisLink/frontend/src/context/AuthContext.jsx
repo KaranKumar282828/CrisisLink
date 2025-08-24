@@ -1,45 +1,91 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useEffect, useState, useContext } from "react";
+import { authAPI } from "../lib/api";
+import { setAuthToken, removeAuthToken } from "../lib/axios";
 
-const AuthContext = createContext(null);
+const AuthCtx = createContext(null);
+export const useAuth = () => useContext(AuthCtx);
 
-export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem("authToken"));
-  const [role, setRole] = useState(() => localStorage.getItem("role")); // "user" | "volunteer" | "admin"
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  });
+export default function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const fetchProfile = async () => {
+    try {
+      const data = await authAPI.getProfile();
+      setUser(data.user);
+      setAuthToken(data.token);
+    } catch (error) {
+      setUser(null);
+      removeAuthToken();
+    } finally {
+      setReady(true);
+    }
+  };
 
   useEffect(() => {
-    if (token) localStorage.setItem("authToken", token);
-    else localStorage.removeItem("authToken");
-  }, [token]);
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchProfile();
+    } else {
+      setReady(true);
+    }
+  }, []);
 
-  useEffect(() => {
-    if (role) localStorage.setItem("role", role);
-    else localStorage.removeItem("role");
-  }, [role]);
+  const login = async (email, password) => {
+    setLoading(true);
+    try {
+      const data = await authAPI.login({ email, password });
+      localStorage.setItem('token', data.token);
+      setAuthToken(data.token);
+      setUser(data.user);
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useEffect(() => {
-    if (user) localStorage.setItem("user", JSON.stringify(user));
-    else localStorage.removeItem("user");
-  }, [user]);
-
-  const loginDemo = ({ role }) => {
-    setToken("demo-token");
-    setRole(role);
-    setUser({ name: "Demo User", email: "demo@resqlink.app" });
+  const register = async (userData) => {
+    setLoading(true);
+    try {
+      const data = await authAPI.register(userData);
+      localStorage.setItem('token', data.token);
+      setAuthToken(data.token);
+      setUser(data.user);
+      return data;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
-    setToken(null);
-    setRole(null);
+    localStorage.removeItem('token');
+    removeAuthToken();
     setUser(null);
   };
 
-  const value = { token, role, user, setToken, setRole, setUser, loginDemo, logout };
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  const updateProfile = async (updates) => {
+    try {
+      const data = await authAPI.updateProfile(updates);
+      setUser(data.user);
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  };
 
-export const useAuth = () => useContext(AuthContext);
+  return (
+    <AuthCtx.Provider value={{ 
+      user, 
+      ready, 
+      loading,
+      login, 
+      register, 
+      logout, 
+      updateProfile,
+      refreshUser: fetchProfile 
+    }}>
+      {children}
+    </AuthCtx.Provider>
+  );
+}

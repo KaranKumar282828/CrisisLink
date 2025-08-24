@@ -1,15 +1,12 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-// Dummy auth check (later replace with real auth logic)
-const isAuthenticated = () => {
-  return localStorage.getItem("authToken") ? true : false;
-};
+export default function ProtectedRoute({ allow = ["user", "volunteer", "admin"] }) {
+  const { user, ready } = useAuth();
 
-const ProtectedRoute = ({ children }) => {
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-};
+  if (!ready) return null; // or a loader
+  if (!user) return <Navigate to="/login" replace />;
 
-export default ProtectedRoute;
+  if (!allow.includes(user.role)) return (<Navigate to="/" replace />);
+  return <Outlet />;
+}
